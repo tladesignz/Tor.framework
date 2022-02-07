@@ -101,6 +101,21 @@ ENDSCRIPT
     }
   end
 
+  m.subspec 'OCSPCache' do |s|
+    s.dependency 'Tor/GeoIP'
+
+    s.dependency 'ReactiveObjC', '~> 3.1.1'
+
+    s.source_files = 'Tor/OCSPCache/*'
+
+    s.public_header_files = [
+      'Tor/OCSPCache/OCSPAuthURLSessionDelegate.h',
+      'Tor/OCSPCache/OCSPCache.h',
+      'Tor/OCSPCache/OCSPResponse.h',
+      'Tor/OCSPCache/OCSPError.h',
+    ]
+  end
+
   m.default_subspecs = 'Core'
 
 end

@@ -365,7 +365,7 @@
 			);
 			inputPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Tor_Example_Mac/Pods-Tor_Example_Mac-frameworks.sh",
-				"${BUILT_PRODUCTS_DIR}/Tor-macOS/Tor.framework",
+				"${BUILT_PRODUCTS_DIR}/Tor-Core-GeoIP/Tor.framework",
 			);
 			name = "[CP] Embed Pods Frameworks";
 			outputPaths = (
@@ -449,10 +449,12 @@
 			);
 			inputPaths = (
 				"${PODS_ROOT}/Target Support Files/Pods-Tor_Example/Pods-Tor_Example-frameworks.sh",
-				"${BUILT_PRODUCTS_DIR}/Tor-iOS/Tor.framework",
+				"${BUILT_PRODUCTS_DIR}/ReactiveObjC/ReactiveObjC.framework",
+				"${BUILT_PRODUCTS_DIR}/Tor-Core-GeoIP-OCSPCache/Tor.framework",
 			);
 			name = "[CP] Embed Pods Frameworks";
 			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactiveObjC.framework",
 				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Tor.framework",
 			);
 			runOnlyForDeploymentPostprocessing = 0;

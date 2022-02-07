@@ -1,18 +1,28 @@
 PODS:
+  - ReactiveObjC (3.1.1)
   - Tor/Core (406.9.2)
   - Tor/GeoIP (406.9.2):
     - Tor/Core
+  - Tor/OCSPCache (406.9.2):
+    - ReactiveObjC (~> 3.1.1)
+    - Tor/GeoIP
 
 DEPENDENCIES:
   - Tor/GeoIP (from `../`)
+  - Tor/OCSPCache (from `../`)
+
+SPEC REPOS:
+  trunk:
+    - ReactiveObjC
 
 EXTERNAL SOURCES:
   Tor:
     :path: "../"
 
 SPEC CHECKSUMS:
+  ReactiveObjC: 011caa393aa0383245f2dcf9bf02e86b80b36040
   Tor: e332fa0cb16ee79fcd32f9626301a86f34bcdde9
 
-PODFILE CHECKSUM: 2e6b5ce7c35de39ebc7cf8a7851f871a1d793275
+PODFILE CHECKSUM: a28cf740c8c1601f947c7affcac06e84da40e93f
 
 COCOAPODS: 1.11.2

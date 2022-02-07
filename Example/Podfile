@@ -3,7 +3,7 @@ use_frameworks!
 target 'Tor_Example' do
   platform :ios, '9.0'
 
-  pod 'Tor/GeoIP', :path => '../' # :podspec => '../TorStatic.podspec'
+  pod 'Tor/OCSPCache', :path => '../' # :podspec => '../TorStatic.podspec'
 
   target 'Tor_Tests' do
     inherit! :search_paths
