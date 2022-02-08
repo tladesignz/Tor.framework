@@ -14,7 +14,7 @@ Pod::Spec.new do |m|
                          'Mike Tigas' => 'mike@tig.as',
                          'Benjamin Erhart' => 'berhart@netzarchitekten.com', }
   m.source           = { :git => 'https://github.com/iCepa/Tor.framework.git',
-                         :branch => 'pure_pod',
+                         :branch => 'ocspcache',
                          :tag => "v#{m.version}",
                          :submodules => true }
   m.social_media_url = 'https://twitter.com/tladesignz'
