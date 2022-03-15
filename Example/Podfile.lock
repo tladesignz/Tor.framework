@@ -1,9 +1,9 @@
 PODS:
   - ReactiveObjC (3.1.1)
-  - Tor/Core (406.9.2)
-  - Tor/GeoIP (406.9.2):
+  - Tor/Core (406.10.1)
+  - Tor/GeoIP (406.10.1):
     - Tor/Core
-  - Tor/OCSPCache (406.9.2):
+  - Tor/OCSPCache (406.10.1):
     - ReactiveObjC (~> 3.1.1)
     - Tor/GeoIP
 
@@ -21,7 +21,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   ReactiveObjC: 011caa393aa0383245f2dcf9bf02e86b80b36040
-  Tor: e332fa0cb16ee79fcd32f9626301a86f34bcdde9
+  Tor: 9c93649f611eb6a26b02cf774f5a4fc6d7234cc0
 
 PODFILE CHECKSUM: a28cf740c8c1601f947c7affcac06e84da40e93f
 
