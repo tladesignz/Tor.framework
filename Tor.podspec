@@ -3,7 +3,7 @@ Pod::Spec.new do |m|
   tor_version = 'tor-0.4.7.10'
 
   m.name             = 'Tor'
-  m.version          = '407.10.1'
+  m.version          = '407.10.2'
   m.summary          = 'Tor.framework is the easiest way to embed Tor in your iOS application.'
   m.description      = 'Tor.framework is the easiest way to embed Tor in your iOS application. Currently, the framework compiles in static versions of tor, libevent, openssl, and liblzma.'
 
@@ -49,21 +49,25 @@ ENDSCRIPT
       {
         :name => 'Build XZ',
         :execution_position => :before_compile,
+        :output_files => ['xz-always-execute-this-but-supress-warning'],
         :script => sprintf(script, "xz")
       },
       {
         :name => 'Build OpenSSL',
         :execution_position => :before_compile,
+        :output_files => ['openssl-always-execute-this-but-supress-warning'],
         :script => sprintf(script, "openssl")
       },
       {
         :name => 'Build libevent',
         :execution_position => :before_compile,
+        :output_files => ['libevent-always-execute-this-but-supress-warning'],
         :script => sprintf(script, "libevent")
       },
       {
         :name => 'Build Tor',
         :execution_position => :before_compile,
+        :output_files => ['tor-always-execute-this-but-supress-warning'],
         :script => sprintf(script, "tor")
       },
     ]
@@ -81,6 +85,7 @@ ENDSCRIPT
     s.script_phase = {
       :name => 'Load GeoIP files',
       :execution_position => :before_compile,
+      :output_files => ['geoip-always-execute-this-but-supress-warning'],
       :script => <<-ENDSCRIPT
 cd "${PODS_TARGET_SRCROOT}"
 if [ ! -f geoip ] || [ `find . -name geoip -empty -maxdepth 1` ] || [ `find . -name geoip -mtime +1 -maxdepth 1` ]
