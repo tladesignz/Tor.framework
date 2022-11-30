@@ -38,17 +38,52 @@
             NSLog(@"authenticated success=%d", success);
 
             if (!success)
+            {
                 return;
+            }
 
             [c addObserverForCircuitEstablished:^(BOOL established) {
                 NSLog(@"established=%d", established);
 
                 if (!established)
+                {
                     return;
+                }
 
                 [c getCircuits:^(NSArray<TORCircuit *> * _Nonnull circuits) {
                     NSLog(@"Circuits: %@", circuits);
                 }];
+
+//                CFTimeInterval startTime = CACurrentMediaTime();
+//
+//                [c getInfoForKeys:@[@"ns/all"] completion:^(NSArray<NSString *> * _Nonnull values) {
+//                    NSLog(@"Line count: %lu", values.count);
+//                    NSLog(@"Elapsed Time: %f", CACurrentMediaTime() - startTime);
+//
+//
+//                    NSArray<TORNode *> *nodes = [TORNode parseFromNsString:values.firstObject];
+//
+//                    NSMutableArray<TORNode *> *exitNodes = [NSMutableArray new];
+//
+//                    for (TORNode *node in nodes)
+//                    {
+//                        if (node.isExit)
+//                        {
+//                            [exitNodes addObject:node];
+//                        }
+//                    }
+//
+//                    NSLog(@"#Nodes: %lu, #Exit Nodes: %lu", nodes.count, exitNodes.count);
+//                    NSLog(@"Elapsed Time: %f", CACurrentMediaTime() - startTime);
+//
+//                    [c resolveCountriesOfNodes:exitNodes testCapabilities:NO completion:^{
+//                        for (TORNode *node in nodes) {
+//                            NSLog(@"Node: %@", node);
+//                        }
+//
+//                        NSLog(@"Elapsed Time: %f", CACurrentMediaTime() - startTime);
+//                    }];
+//                }];
             }];
         }];
     });

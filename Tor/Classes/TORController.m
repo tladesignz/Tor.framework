@@ -116,29 +116,43 @@ static NSString * const TORControllerEndReplyLineSeparator = @" ";
 
 - (BOOL)connect:(out NSError **)error {
     if (_channel)
+    {
         return NO;
+    }
     
     self->sock = -1;
     
     _events = [NSOrderedSet new];
     
-    if (_url) {
+    if (_url)
+    {
         struct sockaddr_un control_addr = {};
         control_addr.sun_family = AF_UNIX;
         strncpy(control_addr.sun_path, _url.fileSystemRepresentation, sizeof(control_addr.sun_path) - 1);
         control_addr.sun_len = (unsigned char)SUN_LEN(&control_addr);
         
         self->sock = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (connect(self->sock, (struct sockaddr *)&control_addr, control_addr.sun_len) == -1) {
+
+        if (connect(self->sock, (struct sockaddr *)&control_addr, control_addr.sun_len) == -1)
+        {
             if (error)
+            {
                 *error = [NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:nil];
+            }
+
             return NO;
         }
-    } else if (_host && _port) {
+    }
+    else if (_host && _port) {
         struct in_addr addr;
-        if (inet_aton(_host.UTF8String, &addr) == 0) {
+
+        if (inet_aton(_host.UTF8String, &addr) == 0)
+        {
             if (error)
+            {
                 *error = [NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:nil];
+            }
+
             return NO;
         }
         
@@ -150,28 +164,40 @@ static NSString * const TORControllerEndReplyLineSeparator = @" ";
         
         self->sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         
-        if (connect(self->sock, (struct sockaddr *)&control_addr, control_addr.sin_len) == -1) {
+        if (connect(self->sock, (struct sockaddr *)&control_addr, control_addr.sin_len) == -1)
+        {
             if (error)
+            {
                 *error = [NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:nil];
+            }
+
             return NO;
         }
-    } else {
+    }
+    else {
         return NO;
     }
     
     __weak TORController *weakSelf = self;
-    _channel = dispatch_io_create(DISPATCH_IO_STREAM, self->sock, [[self class] controlQueue], ^(int __unused error) {
+
+    _channel = dispatch_io_create(DISPATCH_IO_STREAM, self->sock, [self.class controlQueue], ^(int __unused error) {
         close(self->sock);
         
         TORController *strongSelf = weakSelf;
-        if (strongSelf) {
+        if (strongSelf)
+        {
             strongSelf->_channel = nil;
         }
     });
+
     if (!_channel)
+    {
         return NO;
+    }
     
-    NSData *separator = [NSData dataWithBytes:"\x0d\x0a" length:2];
+    NSData *separator = [NSData dataWithBytes:"\x0d\x0a" length:2]; // also known as CR-LF or "\r\n"
+    NSData *period = [NSData dataWithBytes:"." length:1];
+
     NSSet<NSString *> *lineSeparators = [NSSet setWithObjects:TORControllerMidReplyLineSeparator,
                                          TORControllerDataReplyLineSeparator,
                                          TORControllerEndReplyLineSeparator, nil];
@@ -182,76 +208,110 @@ static NSString * const TORControllerEndReplyLineSeparator = @" ";
     __block BOOL dataBlock = NO;
     
     dispatch_io_set_low_water(_channel, 1);
-    dispatch_io_read(_channel, 0, SIZE_MAX, [[self class] controlQueue], ^(bool __unused done, dispatch_data_t data, int __unused error) {
+    dispatch_io_read(_channel, 0, SIZE_MAX, [self.class controlQueue], ^(bool __unused done, dispatch_data_t data, int __unused error) {
         [buffer appendData:(NSData *)data];
         
         NSRange separatorRange;
         NSRange remainingRange = NSMakeRange(0, buffer.length);
-        while ((separatorRange = [buffer rangeOfData:separator options:0 range:remainingRange]).location != NSNotFound) {
+
+        while ((separatorRange = [buffer rangeOfData:separator options:0 range:remainingRange]).location != NSNotFound)
+        {
             NSUInteger lineLength = separatorRange.location - remainingRange.location;
             NSRange lineRange = NSMakeRange(remainingRange.location, lineLength);
-            remainingRange = NSMakeRange(remainingRange.location + lineLength + separator.length, remainingRange.length - lineLength - separator.length);
+            remainingRange = NSMakeRange(remainingRange.location + lineLength + separator.length,
+                                         remainingRange.length - lineLength - separator.length);
             
-            NSData *lineData = [buffer subdataWithRange:lineRange];
-            
-            if (dataBlock) {
-                if ([lineData isEqualToData:[NSData dataWithBytes:"." length:1]]) {
+            if (dataBlock)
+            {
+                NSData *lineData = [buffer subdataWithRange:lineRange];
+
+                if ([lineData isEqualToData:period])
+                {
                     dataBlock = NO;
-                } else {
-                    NSMutableData *lastData = lines.lastObject.mutableCopy;
-                    if (lastData) {
-                        // BUGFIX: Add in separator again. It is needed to pick apart multi-line results later!
-                        if (lastData.length > 0)
+                }
+                else {
+                    if (lines.count > 0)
+                    {
+                        if (lines.lastObject.length > 0)
                         {
+                            NSMutableData *lastData = lines.lastObject.mutableCopy;
+
+                            // BUGFIX: Add in separator again. It is needed to pick apart multi-line results later!
                             [lastData appendData:separator];
+                            [lastData appendData:lineData];
+
+                            [lines replaceObjectAtIndex:(lines.count - 1) withObject:lastData];
                         }
-                        [lastData appendData:lineData];
-                        [lines replaceObjectAtIndex:(lines.count - 1) withObject:lastData];
-                    } else {
+                        else {
+                            [lines replaceObjectAtIndex:(lines.count - 1) withObject:lineData];
+                        }
+                    }
+                    else {
                         [lines addObject:lineData];
                     }
                 }
+
                 continue;
             }
             
-            if (lineData.length < 4)
+            if (lineRange.length < 4)
+            {
                 continue;
-            
-            NSString *statusCodeString = [[NSString alloc] initWithData:[lineData subdataWithRange:NSMakeRange(0, 3)] encoding:NSUTF8StringEncoding];
-            if ([statusCodeString rangeOfCharacterFromSet:[[NSCharacterSet decimalDigitCharacterSet] invertedSet]].location != NSNotFound)
+            }
+
+            NSString *statusCodeString = [[NSString alloc] initWithData:[buffer subdataWithRange:NSMakeRange(lineRange.location, 3)]
+                                                               encoding:NSUTF8StringEncoding];
+
+            if ([statusCodeString rangeOfCharacterFromSet:NSCharacterSet.decimalDigitCharacterSet.invertedSet].location != NSNotFound)
+            {
                 continue;
+            }
             
-            NSString *lineTypeString = [[NSString alloc] initWithData:[lineData subdataWithRange:NSMakeRange(3, 1)] encoding:NSUTF8StringEncoding];
+            NSString *lineTypeString = [[NSString alloc] initWithData:[buffer subdataWithRange:NSMakeRange(lineRange.location + 3, 1)]
+                                                             encoding:NSUTF8StringEncoding];
+
             if (![lineSeparators containsObject:lineTypeString])
+            {
                 continue;
-            
-            buffer = [[buffer subdataWithRange:remainingRange] mutableCopy];
-            remainingRange.location = 0;
+            }
 
             [codes addObject:@(statusCodeString.integerValue)];
-            [lines addObject:[lineData subdataWithRange:NSMakeRange(4, lineData.length - 4)]];
+            [lines addObject:[buffer subdataWithRange:NSMakeRange(lineRange.location + 4, lineRange.length - 4)]];
             
-            if ([lineTypeString isEqualToString:TORControllerDataReplyLineSeparator]) {
+            [buffer replaceBytesInRange:NSMakeRange(0, remainingRange.location) withBytes:NULL length:0];
+            remainingRange.location = 0;
+
+            if ([lineTypeString isEqualToString:TORControllerDataReplyLineSeparator])
+            {
                 dataBlock = YES;
             }
             
-            if ([lineTypeString isEqualToString:TORControllerEndReplyLineSeparator]) {
-                NSArray<NSNumber *> *commandCodes = [codes copy];
-                NSArray<NSData *> *commandLines = [lines copy];
+            if ([lineTypeString isEqualToString:TORControllerEndReplyLineSeparator])
+            {
+                NSArray<NSNumber *> *commandCodes = codes;
+                NSArray<NSData *> *commandLines = lines;
                 codes = [NSMutableArray new];
                 lines = [NSMutableArray new];
                 
                 TORController *strongSelf = weakSelf;
                 if (!strongSelf)
+                {
                     continue;
+                }
                 
                 for (TORObserverBlock observer in [strongSelf->_blocks copy]) {
                     BOOL stop = NO;
                     BOOL handled = observer(commandCodes, commandLines, &stop);
+
                     if (stop)
+                    {
                         [strongSelf->_blocks removeObject:observer];
+                    }
+
                     if (handled)
+                    {
                         break;
+                    }
                 }
             }
         }
@@ -302,7 +362,7 @@ static NSString * const TORControllerEndReplyLineSeparator = @" ";
         }];
     };
     
-    dispatch_async([[self class] controlQueue], ^{
+    dispatch_async([self.class controlQueue], ^{
         if ([self->_events containsObject:event]) {
             completion(YES, nil);
         } else {
@@ -347,7 +407,7 @@ static NSString * const TORControllerEndReplyLineSeparator = @" ";
 
 - (id)addObserver:(TORObserverBlock)observer {
     NSParameterAssert(observer);
-    dispatch_async([[self class] controlQueue], ^{
+    dispatch_async([self.class controlQueue], ^{
         [self->_blocks addObject:observer];
     });
     return observer;
@@ -357,7 +417,7 @@ static NSString * const TORControllerEndReplyLineSeparator = @" ";
     if (!observer)
         return;
     
-    dispatch_async([[self class] controlQueue], ^{
+    dispatch_async([self.class controlQueue], ^{
         [self->_blocks removeObject:(id _Nonnull)observer];
     });
 }
@@ -467,92 +527,82 @@ static NSString * const TORControllerEndReplyLineSeparator = @" ";
 
 - (void)getInfoForKeys:(NSArray<NSString *> *)keys completion:(void (^)(NSArray<NSString *> *values))completion
 {
+    NSData *ok = [NSData dataWithBytes:"OK" length:2];
+
     [self sendCommand:TORCommandGetInfo arguments:keys data:nil observer:^BOOL(NSArray<NSNumber *> *codes, NSArray<NSData *> *lines, BOOL *stop) {
         *stop = YES;
-        NSMutableArray *values = [NSMutableArray new];
 
-        if (lines.count - 1 != keys.count)
+        if (lines.count - 1 != keys.count || codes.count != lines.count)
         {
             if (completion)
             {
-                completion(values);
+                completion(@[]);
             }
 
             return NO;
         }
-        
-        NSMutableArray<NSString *> *strings = [NSMutableArray new];
 
-        for (NSData *line in lines)
-        {
-            NSString *string = [[NSString alloc] initWithData:line encoding:NSUTF8StringEncoding];
-
-            if (!string)
-            {
-                if (completion)
-                {
-                    completion(values);
-                }
-
-                return NO;
-            }
-            
-            [strings addObject:string];
-        }
-        
-        if (codes.lastObject.integerValue != TORControlReplyCodeOK || ![strings.lastObject isEqualToString:@"OK"])
+        if (codes.lastObject.integerValue != TORControlReplyCodeOK || ![lines.lastObject isEqual:ok])
         {
             if (completion)
             {
-                completion(values);
+                completion(@[]);
             }
 
             return NO;
         }
-        
+
         NSMutableDictionary<NSString *, NSString *> *info = [NSMutableDictionary new];
 
-        for (NSUInteger idx = 0; idx < strings.count - 1; idx++)
+        for (NSUInteger i = 0; i < codes.count - 1; i++)
         {
-            if (codes[idx].integerValue == TORControlReplyCodeOK)
+            if (codes[i].integerValue == TORControlReplyCodeOK)
             {
-                NSMutableArray<NSString *> *components = [[strings[idx] componentsSeparatedByString:@"="] mutableCopy];
+                NSString *string = [[NSString alloc] initWithData:lines[i] encoding:NSUTF8StringEncoding];
 
-                if (components.count > 1)
+                if (!string)
                 {
-                    NSString *key = [components.firstObject stringByTrimmingCharactersInSet:
-                                     NSCharacterSet.doubleQuote];
+                    completion(@[]);
 
-                    [components removeObjectAtIndex:0];
-                    NSString* value = [[components componentsJoinedByString:@"="]
-                                       stringByTrimmingCharactersInSet:NSCharacterSet.doubleQuote];
+                    return NO;
+                }
+
+                NSRange pos = [string rangeOfString:@"="];
+
+                if (pos.location != NSNotFound)
+                {
+                    NSString *key = [[string substringToIndex:pos.location] stringByTrimmingCharactersInSet:
+                                     NSCharacterSet.doubleQuote];
 
                     if ([keys containsObject:key])
                     {
-                        info[key] = value;
+                        info[key] = [[string substringFromIndex:pos.location + pos.length]
+                                     stringByTrimmingCharactersInSet:NSCharacterSet.doubleQuote];
                     }
                     else {
                         if (completion)
                         {
-                            completion(values);
-                        }
+                            completion(@[]);
 
-                        return NO;
+                            return NO;
+                        }
                     }
                 }
             }
         }
-        
+
+        NSMutableArray *values = [NSMutableArray new];
+
         for (NSString *key in keys)
         {
             [values addObject:(info[key] ?: [NSNull null])];
         }
-        
+
         if (completion)
         {
             completion(values);
         }
-        
+
         return YES;
     }];
 }
@@ -592,31 +642,44 @@ static NSString * const TORControllerEndReplyLineSeparator = @" ";
     }];
 }
 
-- (void)sendCommand:(NSString *)command arguments:(nullable NSArray<NSString *> *)arguments data:(nullable NSData *)data observer:(TORObserverBlock)observer
+- (void)sendCommand:(NSString *)command
+          arguments:(nullable NSArray<NSString *> *)arguments
+               data:(nullable NSData *)data observer:(TORObserverBlock)observer
 {
     NSParameterAssert(command.length);
     if (!_channel)
+    {
         return;
+    }
 
-    if (arguments == nil) {
+    if (arguments == nil)
+    {
         arguments = @[];
     }
-    
-    NSString *argumentsString = [[@[command] arrayByAddingObjectsFromArray:(NSArray * _Nonnull)arguments] componentsJoinedByString:@" "];
+
+    NSString *argumentsString = [[@[command] arrayByAddingObjectsFromArray:(NSArray * _Nonnull)arguments]
+                                 componentsJoinedByString:@" "];
     
     NSMutableData *commandData = [NSMutableData new];
-    if (data.length) {
+    if (data.length)
+    {
         [commandData appendBytes:"+" length:1];
     }
     [commandData appendData:(NSData * _Nonnull)[argumentsString dataUsingEncoding:NSUTF8StringEncoding]];
     [commandData appendBytes:"\r\n" length:2];
-    if (data.length) {
+
+    if (data.length)
+    {
         [commandData appendData:(NSData * _Nonnull)data];
         [commandData appendBytes:"\r\n.\r\n" length:5];
     }
     
-    dispatch_data_t dispatchData = dispatch_data_create(commandData.bytes, commandData.length, [[self class] controlQueue], DISPATCH_DATA_DESTRUCTOR_DEFAULT);
-    dispatch_io_write(_channel, 0, dispatchData, [[self class] controlQueue], ^(bool done, dispatch_data_t __unused data, int error) {
+    dispatch_data_t dispatchData = dispatch_data_create(commandData.bytes,
+                                                        commandData.length,
+                                                        [self.class controlQueue],
+                                                        DISPATCH_DATA_DESTRUCTOR_DEFAULT);
+
+    dispatch_io_write(_channel, 0, dispatchData, [self.class controlQueue], ^(bool done, dispatch_data_t __unused data, int error) {
         if (done && !error && observer) {
             [self->_blocks insertObject:observer atIndex:0];
         }
@@ -631,7 +694,7 @@ static NSString * const TORControllerEndReplyLineSeparator = @" ";
         {
             if (completion)
             {
-                completion([NSArray new]);
+                completion(@[]);
             }
 
             return;
@@ -656,52 +719,18 @@ static NSString * const TORControllerEndReplyLineSeparator = @" ";
                 [map[i] acquireIpAddressesFromNsResponse:values[i]];
             }
 
-            [self getInfoForKeys:@[@"ip-to-country/ipv4-available", @"ip-to-country/ipv6-available"] completion:^(NSArray<NSString *> * _Nonnull values) {
+            NSMutableArray<TORNode *> *nodes = [NSMutableArray new];
 
-                BOOL ipv4Available = [values.firstObject isEqualToString:@"1"];
-                BOOL ipv6Available = [values.lastObject isEqualToString:@"1"];
+            for (TORCircuit *circuit in circuits)
+            {
+                [nodes addObjectsFromArray:circuit.nodes];
+            }
 
-                NSMutableArray<NSString *> *geoipResolveCalls = [NSMutableArray new];
-                NSMutableArray<TORNode *> *map = [NSMutableArray new];
-
-                for (TORCircuit *circuit in circuits)
+            [self resolveCountriesOfNodes:nodes testCapabilities:YES completion:^{
+                if (completion)
                 {
-                    for (TORNode *node in circuit.nodes)
-                    {
-                        if (ipv4Available && node.ipv4Address)
-                        {
-                            [geoipResolveCalls addObject:[NSString stringWithFormat:@"ip-to-country/%@", node.ipv4Address]];
-                            [map addObject:node];
-                        }
-                        else if (ipv6Available && node.ipv6Address)
-                        {
-                            [geoipResolveCalls addObject:[NSString stringWithFormat:@"ip-to-country/%@", node.ipv6Address]];
-                            [map addObject:node];
-                        }
-                    }
+                    completion(circuits);
                 }
-
-                if (geoipResolveCalls.count < 1)
-                {
-                    if (completion)
-                    {
-                        completion(circuits);
-                    }
-
-                    return;
-                }
-
-                [self getInfoForKeys:geoipResolveCalls completion:^(NSArray<NSString *> * _Nonnull values) {
-                    for (NSUInteger i = 0; i < values.count; i++)
-                    {
-                        map[i].countryCode = values[i];
-                    }
-
-                    if (completion)
-                    {
-                        completion(circuits);
-                    }
-                }];
             }];
         }];
     }];
@@ -752,26 +781,26 @@ static NSString * const TORControllerEndReplyLineSeparator = @" ";
     dispatch_async(dispatch_get_global_queue(queueId, 0), ^{
         __block BOOL success = YES;
 
+        dispatch_group_t group = dispatch_group_create();
+
         for (NSString *circuitId in circuitIds)
         {
-            __block BOOL done = NO;
+            dispatch_group_enter(group);
 
             [self sendCommand:TORCommandCloseCircuit arguments:@[circuitId] data:nil observer:
              ^BOOL(NSArray<NSNumber *> * _Nonnull codes, NSArray<NSData *> * _Nonnull __unused lines, BOOL * _Nonnull stop) {
 
                 success = success && codes.firstObject.integerValue == TORControlReplyCodeOK;
 
-                done = YES;
+                // Need to deparallelize to not mix up responses.
+                dispatch_group_leave(group);
 
                 *stop = YES;
                 return YES;
             }];
-
-            // Need to deparallelize to not mix up responses.
-            while (!done) {
-                [NSThread sleepForTimeInterval:0.1];
-            }
         }
+
+        dispatch_group_wait(group, dispatch_time(DISPATCH_TIME_NOW, 10000000000)); // Wait 10 seconds.
 
         dispatch_async(dispatch_get_main_queue(), ^{
             if (completion)
@@ -795,6 +824,82 @@ static NSString * const TORControllerEndReplyLineSeparator = @" ";
     }
 
     [self closeCircuitsByIds:circuitIds completion:completion];
+}
+
+- (void)resolveCountriesOfNodes:(NSArray<TORNode *> * _Nullable)nodes testCapabilities:(BOOL)testCapabilities completion:(void (^__nullable)(void))completion
+{
+    BOOL __block ipv4Available = YES;
+    BOOL __block ipv6Available = YES;
+
+    if (testCapabilities)
+    {
+        dispatch_group_t group = dispatch_group_create();
+        dispatch_group_enter(group);
+
+        [self getInfoForKeys:@[@"ip-to-country/ipv4-available", @"ip-to-country/ipv6-available"] completion:^(NSArray<NSString *> * _Nonnull values) {
+
+            ipv4Available = [values.firstObject isEqualToString:@"1"];
+            ipv6Available = [values.lastObject isEqualToString:@"1"];
+
+            dispatch_group_leave(group);
+        }];
+
+        dispatch_group_wait(group, dispatch_time(DISPATCH_TIME_NOW, 1000000000)); // Wait 1 second.
+    }
+
+    if (!ipv4Available && !ipv6Available)
+    {
+        if (completion)
+        {
+            completion();
+        }
+
+        return;
+    }
+
+    NSMutableArray<NSString *> *geoipResolveCalls = [NSMutableArray new];
+    NSMutableArray<TORNode *> *map = [NSMutableArray new];
+
+    for (TORNode *node in nodes)
+    {
+        if (node.countryCode.length)
+        {
+            continue;
+        }
+
+        if (ipv4Available && node.ipv4Address.length)
+        {
+            [geoipResolveCalls addObject:[NSString stringWithFormat:@"ip-to-country/%@", node.ipv4Address]];
+            [map addObject:node];
+        }
+        else if (ipv6Available && node.ipv6Address.length)
+        {
+            [geoipResolveCalls addObject:[NSString stringWithFormat:@"ip-to-country/%@", node.ipv6Address]];
+            [map addObject:node];
+        }
+    }
+
+    if (geoipResolveCalls.count < 1)
+    {
+        if (completion)
+        {
+            completion();
+        }
+
+        return;
+    }
+
+    [self getInfoForKeys:geoipResolveCalls completion:^(NSArray<NSString *> * _Nonnull values) {
+        for (NSUInteger i = 0; i < values.count; i++)
+        {
+            map[i].countryCode = values[i];
+        }
+
+        if (completion)
+        {
+            completion();
+        }
+    }];
 }
 
 @end
